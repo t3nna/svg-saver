@@ -1,24 +1,78 @@
 const http = require('http');
 const express = require('express');
-const { PORT } = require('./config');
-const { apiRouter, mainRouter } = require('./routers');
+const {PORT, svgFolder} = require('./config');
+const {apiRouter, mainRouter} = require('./routers');
+const db = require("./entities/Database");
+const Svg = require("./entities/Svg");
 
 
 const app = express();
 
-// setup other
-// setupMiddlewares(app);
+app.use(express.json());
+app.use('/files', express.static(svgFolder))
 
-app.get('/ping', (req, res, next) =>{
-  res.send('pong!')
+app.get('/ping', (req, res, next) => {
+  res.json({ping: 'pong!'})
 })
 
-app.use((req, res) =>{
+app.get('/api/svgs', (req, res) => {
+  const allSvgs = db.find().map(svg => svg.toPublicJSON())
+  const likedSvgs = db.find(true).map(svg => svg.toPublicJSON())
+
+  return res.json({
+    allSvgs, likedSvgs
+  })
+})
+
+app.post('/api/svgs', async (req, res) => {
+  const {content} = req.body
+
+  const svgFile = new Svg()
+
+  await db.insert(svgFile, content)
+
+  return res.json(svgFile.toPublicJSON())
+
+})
+
+
+app.put('/api/svgs/:id', (req, res) => {
+  const svgId = req.params.id
+  const isLiked = req.body.isLiked
+
+  db.setLiked(svgId, isLiked)
+
+  return res.json({isLiked})
+})
+
+app.delete('/api/svgs/:id', async (req, res) => {
+  const svgId = req.params.id
+
+  const id = await db.remove(svgId)
+
+  return res.json({id})
+})
+
+app.get('/svg/:id', (req, res) => {
+  const svgId = req.params.id
+
+  const svg = db.findOne(svgId).toPublicJSON()
+  return res.render('svg', {svg})
+})
+
+app.get('/', (req, res) => {
+  const allSvgs = db.find().map(svg => svg.toPublicJSON())
+  const likedSvgs = db.find(true).map(svg => svg.toPublicJSON())
+
+  return res.render('home', {likedSvgs, allSvgs})
+})
+
+
+app.use((req, res) => {
   res.status(404)
 
   res.send('Not Found!')
 })
-
 
 
 app.listen(PORT, () => {
